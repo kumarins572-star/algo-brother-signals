@@ -1,13 +1,10 @@
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import pandas_ta as ta
-from streamlit_autorefresh import st_autorefresh
+import ta
 
-# 1. Setup Auto-Refresh (Every 10 Seconds)
-st_autorefresh(interval=10000, key="datarefresh")
-
-# 2. Page Branding
+# 1. Page Branding
 st.set_page_config(page_title="Algo Brother Signals", page_icon="📈", layout="wide")
 
 try:
@@ -17,7 +14,7 @@ except:
 
 st.write("---")
 
-# 3. Market Data Detection (Crude Oil)
+# 2. Market Data Detection (Crude Oil)
 symbol = "CL=F"
 st.subheader(f"🔴 Live Terminal: {symbol}")
 
@@ -29,16 +26,20 @@ l_box = col3.empty()
 c_box = col4.empty()
 
 try:
-    # 4. Fetch Live Data
+    # 3. Fetch Live Data
     df = yf.download(symbol, period="1d", interval="2m")
+
+    # Fix yfinance MultiIndex columns issue
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.droplevel(1)
 
     if not df.empty:
         last = df.iloc[-1]
         o, h, l, c = last['Open'], last['High'], last['Low'], last['Close']
 
-        # 5. Technical Indicators
-        df['RSI'] = ta.rsi(df['Close'], length=14)
-        df['EMA50'] = ta.ema(df['Close'], length=50)
+        # 4. Technical Indicators using 'ta' library
+        df['RSI'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi()
+        df['EMA50'] = ta.trend.EMAIndicator(close=df['Close'], window=50).ema_indicator()
         
         rsi_val = df['RSI'].iloc[-1]
         ema_val = df['EMA50'].iloc[-1]
@@ -51,15 +52,15 @@ try:
 
         st.markdown(f"**RSI:** `{round(rsi_val,2)}` | **EMA 50:** `{round(ema_val,2)}`")
 
-        # 6. Candle Pattern Logic
+        # 5. Candle Pattern Logic
         body = abs(c - o)
         lower_wick = min(o, c) - l
         upper_wick = h - max(o, c)
 
-        is_hammer = lower_wick > (2 * body) and upper_wick < (body * 0.5)
-        is_shooting_star = upper_wick > (2 * body) and lower_wick < (body * 0.5)
+        is_hammer = lower_wick > (2 * body) and upper_wick < (body * 0.5) and body > 0
+        is_shooting_star = upper_wick > (2 * body) and lower_wick < (body * 0.5) and body > 0
 
-        # 7. Final Output & Alerts
+        # 6. Final Output & Alerts
         st.write("---")
         
         if rsi_val < 35 and c > ema_val:
@@ -83,4 +84,3 @@ try:
 
 except Exception as e:
     st.error(f"System Error: {e}")
-  
